@@ -1,0 +1,24 @@
+Cluster info for e54, 12.27.2021
+
+- Number of clusters = 8
+### Replicate = 0 ###
+    * cluster 0: frontal regions (independent from motor cortex, late activation around reward, more active on correct trials)
+    * cluster 1: motor regions, earlier activation, does not discriminate correct vs error trials
+    * cluster 2: visual areas, does not discriminate reward vs error trials, active early on in the trial (could be residual)
+    * cluster 3: motor regions, stronger in error trials (but relatively smaller effect size compared to cluster 0)
+    * cluster 4: blood vessel + visual areas, stronger in error trials (clear effect), sustained signal later on in the trial,
+    * signal ramping up during the session
+    * cluster 5: very static signal, mostly non-blood vessel
+    * cluster 6: very static signal, retrosplenial
+    * cluster 7: similar to cluster 3 but later on in the trial and does not include as much blood vessel signal
+
+
+### Replicate = 1 ###
+    * cluster 0: motor, equally active on corr/incorr, active around reward
+    * cluster 1: frontal, more active on corr, active around reward
+    * cluster 2: visual, dipping later in the trial, more active on incorr
+    * cluster 3: motor + frontal, more active incor, early in trial
+    * cluster 4: blood vessel + visual, stronger in error, strange dip and then increased
+    * cluster 5: motor + lateral frontal, later in trial, does not discrim.
+    * cluster 6: retrosplenial, more active in corr, early in trial
+    * cluster 7: motor, later in trial, does not discrim.

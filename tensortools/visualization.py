@@ -114,7 +114,7 @@ def plot_similarity(ensemble, ax=None, jitter=0.1,
 
 
 def plot_factors(U, plots='line', fig=None, axes=None, scatter_kw=dict(),
-                 line_kw=dict(), bar_kw=dict(), **kwargs):
+                 line_kw=dict(), bar_kw=dict(), mask=None, **kwargs):
     """Plots a KTensor.
 
     Note: Each keyword option is broadcast to all modes of the KTensor. For
@@ -155,6 +155,7 @@ def plot_factors(U, plots='line', fig=None, axes=None, scatter_kw=dict(),
     # ~~~~~~~~~~~~~
     # PARSE OPTIONS
     # ~~~~~~~~~~~~~
+    print('testing')
     kwargs.setdefault('figsize', (8, U.rank))
 
     # parse optional inputs
@@ -187,8 +188,28 @@ def plot_factors(U, plots='line', fig=None, axes=None, scatter_kw=dict(),
 
     # main loop, plot each factor
     plot_obj = np.empty((U.rank, U.ndim), dtype=object)
+    counter = 0
     for r in range(U.rank):
         for i, f in enumerate(U):
+            # Skipping the neuron loading (for high-dim data will take long time)
+            counter += 1
+            if i == 0:
+                if mask is not None:
+                    maskcopy = mask.copy()
+                    plt.subplot(U.rank, U.ndim, counter)
+                    ens_map = f[:,r]
+                    N1, N2 = mask.shape
+                    # maskbinary = mask.copy()
+                    # maskbinary[mask != 0] = 1
+                    # maskbinary[np.abs(mask) >= 300] = 0
+                    # maskbinary = np.reshape(mask_unroll, (150,150))
+                    # print(np.sum(maskbinary != 0))
+                    # print(ens_map.shape)
+                    maskcopy[mask != 0] = ens_map
+                    ensmapreshape = np.reshape(maskcopy, (N1, N2))
+                    axes[r, i].imshow(ensmapreshape)
+                    plt.axis('off')
+                continue
             # start plots at 1 instead of zero
             x = np.arange(1, f.shape[0]+1)
 
@@ -222,14 +243,14 @@ def plot_factors(U, plots='line', fig=None, axes=None, scatter_kw=dict(),
     for i in range(U.ndim):
         yl = [a.get_ylim() for a in axes[:, i]]
         y0, y1 = min([y[0] for y in yl]), max([y[1] for y in yl])
-        [a.set_ylim((y0, y1)) for a in axes[:, i]]
+        # [a.set_ylim((y0, y1)) for a in axes[:, i]]
 
     # format y-ticks
     for r in range(U.rank):
         for i in range(U.ndim):
             # only two labels
             ymin, ymax = np.round(axes[r, i].get_ylim(), 2)
-            axes[r, i].set_ylim((ymin, ymax))
+            # axes[r, i].set_ylim((ymin, ymax))
 
             # remove decimals from labels
             if ymin.is_integer():
@@ -238,7 +259,7 @@ def plot_factors(U, plots='line', fig=None, axes=None, scatter_kw=dict(),
                 ymax = int(ymax)
 
             # update plot
-            axes[r, i].set_yticks([ymin, ymax])
+            # axes[r, i].set_yticks([ymin, ymax])
 
     plt.tight_layout()
 
