@@ -59,7 +59,7 @@ def find_cluster_contributions(ensemble, num_components, replicate, maskbinary=N
     contributions = [elem / recons_sum for elem in recons_means]
 
 
-    return contributions
+    return recons_means, contributions
 
 
 
