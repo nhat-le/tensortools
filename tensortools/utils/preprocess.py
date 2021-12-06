@@ -4,9 +4,9 @@ import glob
 from scipy.ndimage.morphology import binary_fill_holes
 
 
-def load_pkl_data(fileid):
-    matpath = '/Volumes/GoogleDrive/Other computers/ImagingDESKTOP-AR620FK/processed/tca-mat'
-    ensembles_path = '/Volumes/GoogleDrive/Other computers/ImagingDESKTOP-AR620FK/processed/ensembles'
+def load_pkl_data(matpath, ensembles_path, fileid):
+    # matpath = '/Volumes/GoogleDrive/Other computers/ImagingDESKTOP-AR620FK/processed/tca-mat'
+    # ensembles_path = '/Volumes/GoogleDrive/Other computers/ImagingDESKTOP-AR620FK/processed/ensembles'
 
     files = glob.glob(ensembles_path + '/*.pkl')
     fileroots = [elem.split('/')[-1].split('_')[:2] for elem in files]
