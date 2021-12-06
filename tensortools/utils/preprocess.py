@@ -11,33 +11,51 @@ def prepare_data(datamat, mask):
     N1,N2, T, K = datamat.shape
 
     datamat_unroll = np.reshape(datamat, (N1*N2, T, -1))
-    datamat_unroll_masked = datamat_unroll[mask_unroll == 1,:,:]
-
-    minval = np.nanmin(datamat_unroll_masked)
-    maxval = np.nanmax(datamat_unroll_masked)
-
     datamat_unroll = datamat_unroll[mask_unroll == 1,:,:]
+    minval = np.nanmin(datamat_unroll)
+    maxval = np.nanmax(datamat_unroll)
 
     # Normalize the data
     normdatamat = (datamat_unroll - minval) / (maxval - minval)
 
-    # TODO: Return the 2d normdatamat
-    normdatamat2d = np.zeros((N1 * N2, T, K)) * np.nan
-    normdatamat2d[mask_unroll == 1, :, :] = normdatamat
-    normdatamat2d = normdatamat2d.reshape((N1, N2, T, K))
-
-    # datamat_unroll_copy = datamat_unroll.copy()
-    # datamat_unroll_copy[mask_unroll != 1] = np.nan
-    # datamat_unroll_reshape = np.reshape(datamat_unroll_copy, (N1, N2, T, -1))
-    # datamat_unroll_reshape = np.transpose(datamat_unroll_reshape, axes=[2, 3, 0, 1])
-    # datamat_unroll_reshape = (datamat_unroll_reshape - minval) / (maxval - minval)
-    # datamat_unroll_reshape = np.transpose(datamat_unroll_reshape, axes=[2, 3, 0, 1])
-
-    # Other ideas for normalizing the data
-    # normdatamat = np.zeros_like(datamat_unroll_masked)
-    # # for i in range(datamat_unroll.shape[0]):
-    #     cellmat = datamat_unroll[i, :, :]
-    #     normcellmat = (cellmat - minval) / (maxval - minval)
-    #     normdatamat[i, :, :] = normcellmat
+    # Return the 2d normdatamat
+    normdatamat2d = convert_to_2d(normdatamat, maskbinary)
 
     return normdatamat, normdatamat2d, maskbinary
+
+def convert_to_2d(datamat, mask):
+    '''
+    Given a flattened data, return the data to a 2-d representation
+    :param datamat: np array of size N x T x K where N < N1 * N2 is a subset of pixels
+    defined by the mask
+    :param mask: np array of size N1 x N2, where N pixels are 1, others are zero
+    :return: N1 x N2 x T x K np array
+    '''
+    N1, N2 = mask.shape
+    _, T, K = datamat.shape
+    datamat2d = np.zeros((N1 * N2, T, K)) * np.nan
+    mask_unroll = mask.flatten().astype('int')
+    datamat2d[mask_unroll == 1, :, :] = datamat
+    datamat2d = datamat2d.reshape((N1, N2, T, K))
+
+    return datamat2d
+
+def apply_mask(datamat, mask):
+    '''
+    Given a datamat, apply and flatten based on mask
+    :param datamat: np array of size N1 x N2 x T x K
+    :param mask: np array of size N1 x N2, where
+    :param mask: np array of size N1 x N2, where N pixels are 1, others are zero
+    :return: N x T x K np array
+    '''
+    N1, N2, T, K = datamat.shape
+    assert mask.shape[0] == N1 and mask.shape[1] == N2
+    mask_unroll = mask.flatten().astype('int')
+    res = datamat.reshape((N1 * N2, T, K))
+    return res[mask_unroll == 1, :, :]
+
+
+
+
+
+
