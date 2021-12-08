@@ -8,15 +8,15 @@ def load_pkl_data(matpath, ensembles_path, fileid):
     # matpath = '/Volumes/GoogleDrive/Other computers/ImagingDESKTOP-AR620FK/processed/tca-mat'
     # ensembles_path = '/Volumes/GoogleDrive/Other computers/ImagingDESKTOP-AR620FK/processed/ensembles'
 
-    files = glob.glob(ensembles_path + '/*.pkl')
-    fileroots = [elem.split('/')[-1].split('_')[:2] for elem in files]
+    # files = glob.glob(ensembles_path + '/*.pkl')
+    # fileroots = [elem.split('/')[-1].split('_')[:2] for elem in files]
+    #
+    # fileroot = f'{fileroots[fileid][0]}_{fileroots[fileid][1]}'
+    # matfilename = f'{matpath}/{fileroot}pix_tca_nonneg_10comp-blueonly.mat'
+    # ensembles_filename = f'{ensembles_path}/{fileroot}_ensemble.pkl'
 
-    fileroot = f'{fileroots[fileid][0]}_{fileroots[fileid][1]}'
-    matfilename = f'{matpath}/{fileroot}pix_tca_nonneg_10comp-blueonly.mat'
-    ensembles_filename = f'{ensembles_path}/{fileroot}_ensemble.pkl'
-
-    matdata = joblib.load(matfilename)
-    ensemble = joblib.load(ensembles_filename)
+    matdata = joblib.load(matpath)
+    ensemble = joblib.load(ensembles_path)
 
     feedback = matdata['feedback']
 
@@ -32,7 +32,7 @@ def load_pkl_data(matpath, ensembles_path, fileid):
     except AssertionError:
         print(f'Warning: file {fileid} mask size does not match dimension of W')
 
-    return ensemble, matdata, feedback, maskbinary, fileroot
+    return ensemble, matdata, feedback, maskbinary
 
     #     print('A, B, W shapes: ', matdata['A'].shape, matdata['B'].shape, matdata['W'].shape)
     #     print('mask shape:', maskbinary.shape, ', nonzeros: ', np.sum(maskbinary > 0))

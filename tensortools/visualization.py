@@ -199,12 +199,6 @@ def plot_factors(U, plots='line', fig=None, axes=None, scatter_kw=dict(),
                     plt.subplot(U.rank, U.ndim, counter)
                     ens_map = f[:,r]
                     N1, N2 = mask.shape
-                    # maskbinary = mask.copy()
-                    # maskbinary[mask != 0] = 1
-                    # maskbinary[np.abs(mask) >= 300] = 0
-                    # maskbinary = np.reshape(mask_unroll, (150,150))
-                    # print(np.sum(maskbinary != 0))
-                    # print(ens_map.shape)
                     maskcopy[mask != 0] = ens_map
                     ensmapreshape = np.reshape(maskcopy, (N1, N2))
                     axes[r, i].imshow(ensmapreshape)
