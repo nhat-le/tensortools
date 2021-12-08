@@ -4,17 +4,7 @@ import glob
 from scipy.ndimage.morphology import binary_fill_holes
 
 
-def load_pkl_data(matpath, ensembles_path, fileid):
-    # matpath = '/Volumes/GoogleDrive/Other computers/ImagingDESKTOP-AR620FK/processed/tca-mat'
-    # ensembles_path = '/Volumes/GoogleDrive/Other computers/ImagingDESKTOP-AR620FK/processed/ensembles'
-
-    # files = glob.glob(ensembles_path + '/*.pkl')
-    # fileroots = [elem.split('/')[-1].split('_')[:2] for elem in files]
-    #
-    # fileroot = f'{fileroots[fileid][0]}_{fileroots[fileid][1]}'
-    # matfilename = f'{matpath}/{fileroot}pix_tca_nonneg_10comp-blueonly.mat'
-    # ensembles_filename = f'{ensembles_path}/{fileroot}_ensemble.pkl'
-
+def load_pkl_data(matpath, ensembles_path):
     matdata = joblib.load(matpath)
     ensemble = joblib.load(ensembles_path)
 
@@ -30,12 +20,9 @@ def load_pkl_data(matpath, ensembles_path, fileid):
     try:
         assert (matdata['W'].shape[0] == np.sum(maskbinary > 0))
     except AssertionError:
-        print(f'Warning: file {fileid} mask size does not match dimension of W')
+        print(f'Warning: file mask size does not match dimension of W')
 
     return ensemble, matdata, feedback, maskbinary
-
-    #     print('A, B, W shapes: ', matdata['A'].shape, matdata['B'].shape, matdata['W'].shape)
-    #     print('mask shape:', maskbinary.shape, ', nonzeros: ', np.sum(maskbinary > 0))
 
 def prepare_data(datamat, mask):
     '''
