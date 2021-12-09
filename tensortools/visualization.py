@@ -4,6 +4,7 @@ Plotting routines for CP decompositions
 
 import numpy as np
 import matplotlib.pyplot as plt
+import tensortools.utils.preprocess
 
 __all__ = ['plot_factors', 'plot_objective', 'plot_similarity']
 
@@ -189,20 +190,27 @@ def plot_factors(U, plots='line', fig=None, axes=None, scatter_kw=dict(),
     # main loop, plot each factor
     plot_obj = np.empty((U.rank, U.ndim), dtype=object)
     counter = 0
+
+    if mask is not None:
+        W, _, _ = U.factors
+        W2d = tensortools.utils.preprocess.convert_to_2d(W, mask)
+
     for r in range(U.rank):
         for i, f in enumerate(U):
             # Skipping the neuron loading (for high-dim data will take long time)
             counter += 1
             if i == 0:
                 if mask is not None:
-                    maskcopy = mask.copy()
-                    plt.subplot(U.rank, U.ndim, counter)
-                    ens_map = f[:,r]
-                    N1, N2 = mask.shape
-                    maskcopy[mask != 0] = ens_map
-                    ensmapreshape = np.reshape(maskcopy, (N1, N2))
+                    # maskcopy = mask.copy()
+                    # plt.subplot(U.rank, U.ndim, counter)
+                    # ens_map = f[:,r]
+                    # N1, N2 = mask.shape
+                    # maskcopy[mask != 0] = ens_map
+                    # ensmapreshape = np.reshape(maskcopy, (N1, N2))
+                    ensmapreshape = W2d[:,:,r]
                     axes[r, i].imshow(ensmapreshape)
-                    plt.axis('off')
+                    axes[r, i].axis('off')
+                    plt.tight_layout()
                 continue
             # start plots at 1 instead of zero
             x = np.arange(1, f.shape[0]+1)

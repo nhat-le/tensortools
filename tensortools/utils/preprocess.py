@@ -9,6 +9,8 @@ def load_pkl_data(matpath, ensembles_path):
     ensemble = joblib.load(ensembles_path)
 
     feedback = matdata['feedback']
+    responses = matdata['responses']
+    targets = matdata['target']
 
     # Try to recover the mask from matdata
     maxmask = np.max(matdata['ens_map_all'] ** 2, axis=2)
@@ -22,7 +24,7 @@ def load_pkl_data(matpath, ensembles_path):
     except AssertionError:
         print(f'Warning: file mask size does not match dimension of W')
 
-    return ensemble, matdata, feedback, maskbinary
+    return ensemble, matdata, dict(feedback=feedback, responses=responses, targets=targets), maskbinary
 
 def prepare_data(datamat, mask):
     '''
@@ -56,11 +58,20 @@ def convert_to_2d(datamat, mask):
     :return: N1 x N2 x T x K np array
     '''
     N1, N2 = mask.shape
-    _, T, K = datamat.shape
-    datamat2d = np.zeros((N1 * N2, T, K)) * np.nan
-    mask_unroll = mask.flatten().astype('int')
-    datamat2d[mask_unroll == 1, :, :] = datamat
-    datamat2d = datamat2d.reshape((N1, N2, T, K))
+
+    if datamat.ndim == 3:
+        _, T, K = datamat.shape
+        datamat2d = np.zeros((N1 * N2, T, K)) * np.nan
+        mask_unroll = mask.flatten().astype('int')
+        datamat2d[mask_unroll == 1, :, :] = datamat
+        datamat2d = datamat2d.reshape((N1, N2, T, K))
+    elif datamat.ndim == 2:
+        T, K = datamat.shape
+        datamat2d = np.zeros((N1 * N2, K))
+        mask_unroll = mask.flatten().astype('int')
+        datamat2d[mask_unroll != 0] = datamat
+        datamat2d[mask_unroll == 0] = np.nan
+        datamat2d = np.reshape(datamat2d, (N1, N2, K))
 
     return datamat2d
 
