@@ -3,7 +3,6 @@ import pickle
 import scipy.io
 import joblib
 import tensortools as tt
-import smartload.smartload as smart
 import glob
 from scipy.ndimage.morphology import binary_fill_holes
 import mat73
