@@ -156,7 +156,6 @@ def plot_factors(U, plots='line', fig=None, axes=None, scatter_kw=dict(),
     # ~~~~~~~~~~~~~
     # PARSE OPTIONS
     # ~~~~~~~~~~~~~
-    print('testing')
     kwargs.setdefault('figsize', (8, U.rank))
 
     # parse optional inputs
