@@ -69,7 +69,7 @@ def tsp_linearize(data, niter=1000, metric='euclidean', **kwargs):
     dist[:N, :N] = scipy.spatial.distance.squareform(D)
 
     # solve TSP
-    perm, cost_hist = _solve_tsp(dist)
+    perm, cost_hist = _solve_tsp(dist, niter=niter)
 
     # remove dummy node at position i
     i = np.argwhere(perm == N).ravel()[0]

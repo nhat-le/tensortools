@@ -4,7 +4,7 @@ Plotting routines for CP decompositions
 
 import numpy as np
 import matplotlib.pyplot as plt
-import tensortools.utils.preprocess
+import tensortools.custom.preprocess
 
 __all__ = ['plot_factors', 'plot_objective', 'plot_similarity']
 

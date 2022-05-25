@@ -76,6 +76,7 @@ class Ensemble(object):
 
         # Iterate over model ranks, optimize multiple replicates at each rank.
         for r in ranks:
+            print(r)
 
             # Initialize storage
             if r not in self.results:

@@ -23,7 +23,7 @@ def _check_cpd_inputs(X, rank):
     """
     if X.ndim < 3:
         raise ValueError("Array with X.ndim > 2 expected.")
-    if rank <= 0 or not isinstance(rank, int):
+    if rank <= 0 or (not isinstance(rank, int) and not isinstance(rank, np.int64)):
         raise ValueError("Rank is invalid.")
 
 
