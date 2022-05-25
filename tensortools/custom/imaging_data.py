@@ -41,11 +41,20 @@ class ImagingData(object):
         else:
             self.trialsubset = np.arange(self.Ntrials)
 
-        self.mask = (np.abs(templatedata['template']['atlas']) < 300) & (templatedata['template']['atlas'] != 0)
+        self.masktemp = (np.abs(templatedata['template']['atlas']) < 300) & (templatedata['template']['atlas'] != 0)
+
+        if self.masktemp.shape[0] != self.N1 or self.masktemp.shape[1] != self.N2:
+            print(f'Dimension mismatch: mask shape: {self.masktemp.shape[0]} x {self.masktemp.shape[1]}')
+            print(f'Data shape: {self.N1} x {self.N2}')
+
+        # pads the mask if there is a dimension mismatch
+        self.mask = np.zeros((self.N1, self.N2))
+        self.mask[:min(self.N1, self.masktemp.shape[0]), :min(self.N2, self.masktemp.shape[1])] = self.masktemp[:min(self.N1, self.masktemp.shape[0]),
+                                                                     :min(self.N2, self.masktemp.shape[1])]
         self.mask_unroll = self.mask.ravel()
 
         self.datamat_unroll = np.reshape(self.data[:,:,:,self.trialsubset], (self.N1 * self.N2, self.T,
-                                len(self.trialsubset)))[self.mask_unroll, :, :]
+                                len(self.trialsubset)))[self.mask_unroll == 1, :, :]
         self.feedback = self.feedback_full[self.trialsubset]
 
         self.ensemble = None

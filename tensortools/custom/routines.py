@@ -50,7 +50,7 @@ def parse_kwargs(kwargs):
 if __name__ == '__main__':
     rootpath = '/Volumes/GoogleDrive/Other computers/ImagingDESKTOP-AR620FK/processed/raw'
     animal = 'f01'
-    expdate = '030421'
+    expdate = '030521'
     fit_method = 'ncp_hals'
     ranks = [1]
     kwargs = {}
