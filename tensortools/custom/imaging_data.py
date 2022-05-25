@@ -10,12 +10,19 @@ class ImagingData(object):
     '''
     Class for imaging data
     '''
-    def __init__(self, animal, expdate, trialsubset=None):
+    def __init__(self, rootpath, animal, expdate, trialsubset=None):
+        '''
+        Initalize the object
+        :param rootpath: path to the processed folder
+        :param animal: lowercase string, animal name
+        :param expdate: expdate string, such as '030421'
+        :param trialsubset: subset of trials to fit the TCA
+        '''
         self.animal = animal
         self.expdate = expdate
 
-        datapath = f'/Volumes/GoogleDrive/Other computers/ImagingDESKTOP-AR620FK/processed/raw/extracted/{animal}/allData_extracted_{animal}_{expdate}pix.mat'
-        templatepath = f'/Volumes/GoogleDrive/Other computers/ImagingDESKTOP-AR620FK/processed/raw/templateData/{animal}/templateData_{animal}_{expdate}pix.mat'
+        datapath = f'{rootpath}/extracted/{animal}/allData_extracted_{animal}_{expdate}pix.mat'
+        templatepath = f'{rootpath}/templateData/{animal}/templateData_{animal}_{expdate}pix.mat'
 
         start = time.time()
         data = smart.loadmat(datapath)
