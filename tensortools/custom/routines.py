@@ -17,7 +17,7 @@ def load_and_run(rootpath, animal, expdate, fit_method, ranks, kwargs):
                          keep_positive=kwargs['keep_positive'])
     animaldata.tca_fit(nonneg=kwargs['nonneg'], fit_method=fit_method, ranks=ranks,
                        replicates=kwargs['replicates'])
-    return animaldata.ensemble
+    return animaldata.ensemble, animaldata.mask
 
 
 def parse_kwargs(kwargs):

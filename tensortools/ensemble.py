@@ -136,6 +136,37 @@ class Ensemble(object):
         self._check_rank(rank)
         return [result.obj for result in self.results[rank]]
 
+    def get_objectives(self):
+        '''
+        Get all the objectives of the ensemble
+        :param ensemble: Ensemble object
+        :return: ranks, obj: the ranks and the objectvies of the ensemble
+        '''
+        ranks = sorted(self.results)
+        objs = []
+        for rank in ranks:
+            o = self.objectives(rank)
+            objs.extend(o)
+
+        objs = np.reshape(np.array(objs), (len(ranks), -1))
+
+        return ranks, objs
+
+    def get_similarities(self):
+        '''
+        Get all similarities of the ensemble
+        :return: ranks, sims: the ranks and simlarities of the ensemble
+        '''
+        ranks = sorted(self.results)
+        sims = []
+        for rank in ranks:
+            sim = self.similarities(rank)
+            sims.extend(sim[1:])
+
+        sims = np.reshape(np.array(sims), (len(ranks), -1))
+
+        return ranks, sims
+
     def similarities(self, rank):
         """Returns similarity scores for models with specified rank.
         """
