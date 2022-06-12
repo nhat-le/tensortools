@@ -6,6 +6,26 @@ import smartload.smartload as smart
 import tensortools as tt
 import time
 
+import tensortools.tensors
+from tensortools.custom.ensemble_data import EnsembleData
+
+
+class Template(object):
+    '''
+    Class to store the template atlas
+    '''
+    def __init__(self, templatepath):
+        '''
+        Initiate the template by loading from the template path
+        :param templatepath: a string
+        '''
+        templatedata = smart.loadmat(templatepath)
+        self.atlas = templatedata['template']['atlas']
+        self.names = templatedata['template']['areaStrings']
+        self.ids = templatedata['template']['areaid']
+
+
+
 class ImagingData(object):
     '''
     Class for imaging data
@@ -26,7 +46,10 @@ class ImagingData(object):
 
         start = time.time()
         data = smart.loadmat(datapath)
+
         templatedata = smart.loadmat(templatepath)
+        self.template = Template(templatepath)
+
         end = time.time()
         print(f'Finished loading in {end - start} secs')
 
@@ -41,17 +64,25 @@ class ImagingData(object):
         else:
             self.trialsubset = np.arange(self.Ntrials)
 
-        self.masktemp = (np.abs(templatedata['template']['atlas']) < 300) & (templatedata['template']['atlas'] != 0)
+        self.masktemp = (np.abs(self.template.atlas) < 300) & (self.template.atlas != 0)
+        # self.masktemp = (np.abs(templatedata['template']['atlas']) < 300) & (templatedata['template']['atlas'] != 0)
 
         if self.masktemp.shape[0] != self.N1 or self.masktemp.shape[1] != self.N2:
             print(f'Dimension mismatch: mask shape: {self.masktemp.shape[0]} x {self.masktemp.shape[1]}')
             print(f'Data shape: {self.N1} x {self.N2}')
 
-        # pads the mask if there is a dimension mismatch
+        # pads the mask and template atlas if there is a dimension mismatch
         self.mask = np.zeros((self.N1, self.N2))
         self.mask[:min(self.N1, self.masktemp.shape[0]), :min(self.N2, self.masktemp.shape[1])] = self.masktemp[:min(self.N1, self.masktemp.shape[0]),
                                                                      :min(self.N2, self.masktemp.shape[1])]
-        self.mask_unroll = self.mask.ravel()
+        atlaspad = np.zeros((self.N1, self.N2))
+        atlaspad[:min(self.N1, self.masktemp.shape[0]), :min(self.N2, self.masktemp.shape[1])] = self.template.atlas[:min(self.N1, self.masktemp.shape[0]),
+                                                                     :min(self.N2, self.masktemp.shape[1])]
+        self.template.atlas = atlaspad
+
+
+
+        self.mask_unroll = self.mask.ravel().astype('int')
 
         self.datamat_unroll = np.reshape(self.data[:,:,:,self.trialsubset], (self.N1 * self.N2, self.T,
                                 len(self.trialsubset)))[self.mask_unroll == 1, :, :]
@@ -61,6 +92,8 @@ class ImagingData(object):
         self.recons = None
         self.tca_ranks = None
         self.conditional_pred = None
+
+        self.datamat_norm = None
 
     def change_trial_subset(self, subset):
         '''
@@ -79,6 +112,99 @@ class ImagingData(object):
         self.recons = None
         self.tca_ranks = None
         self.conditional_pred = None
+
+
+    def compute_bilateral_correlations(self, region_name):
+        '''
+        Compute the correlations between the regions on left and right side
+        :param region_name: str, a region name (without L, R)
+        :return: a single float, correlation, or np.nan if regions don't exist
+        '''
+        left_name = 'L-' + region_name
+        right_name = 'R-' + region_name
+
+        if left_name not in self.template.names or right_name not in self.template.names:
+            return np.nan
+
+        raw_sq = self.make_square_matrix(self.datamat_norm)
+        # print(raw_sq.shape)
+
+        activityL = self.extract_region_activity(left_name, custom_mat=raw_sq)
+        activityR = self.extract_region_activity(right_name, custom_mat=raw_sq)
+
+        # compute the correlation
+        mean_actL = np.mean(activityL[20:25, :], axis=0)
+        mean_actR = np.mean(activityR[20:25, :], axis=0)
+
+        return np.corrcoef(mean_actR, mean_actL)[0, 1]
+
+    def color_atlas(self, regnames, vals):
+        '''
+        given values corresponding to individual regions in an atlas
+        Use the template to create a 'colored' atlas with regions
+        replaced with their corresponding values
+        :param regnames: array, names of the regions, if L/R omitted, will
+        color both sides
+        :param vals: the values corresponding to the regions, requires
+        len(vals) == len(regnames)
+        :return: the colored atlas of size N1 x N2
+        '''
+        assert(len(regnames) == len(vals))
+        arr = np.zeros_like((self.template.atlas))
+        for name, val in zip(regnames, vals):
+            if name[:2] != 'L-' or name[:2] != 'R-': #no side given, will color both sides
+                nameL = 'L-' + name
+                nameR = 'R-' + name
+                idxL = np.where(self.template.names == nameL)
+                idxR = np.where(self.template.names == nameR)
+
+                arr[self.template.atlas == self.template.ids[idxL]] = val
+                arr[self.template.atlas == self.template.ids[idxR]] = val
+
+            else: # color one side only
+                idx = np.where(self.template.names == name)
+                arr[self.template.atlas == self.template.ids[idx]] = val
+
+        return arr
+
+
+
+
+
+    def extract_region_activity(self, name, custom_mat=None, custom_mask=None):
+        '''
+        Extract the region activity based on the template and region name
+        If custom_mat is given, will extract the regional activity from the custom array instead
+        else, if custom_mat is None (default), will extract the activity from the self.data
+        If custom_mask is provided (size N1 x N2 array), will use the mask provided instead
+        :param name: str, region name
+        :return: an array of size T x Ntrials: average activity of all pixels in the region
+        '''
+        if custom_mask is None:
+            idx = np.where(self.template.names == name)[0]
+            assert (len(idx) == 1)
+            regionID = self.template.ids[idx]
+            region_mask = (self.template.atlas == regionID).ravel()
+        else:
+            region_mask = custom_mask.ravel()
+
+        if custom_mat is None:
+            if self.datamat_norm is not None:
+                region_data_unroll = np.reshape(self.datamat_norm, (self.N1 * self.N2, self.T, -1))[region_mask == 1, :, :]
+            else:
+                region_data_unroll = np.reshape(self.data, (self.N1 * self.N2, self.T, -1))[region_mask == 1, :, :]
+
+        else:
+            assert(custom_mat.shape[0] == self.N1)
+            assert(custom_mat.shape[1] == self.N2)
+            assert(custom_mat.shape[2] == self.T)
+            assert(custom_mat.shape[3] == self.Ntrials)
+            region_data_unroll = np.reshape(custom_mat, (self.N1 * self.N2, self.T, -1))[region_mask == 1, :, :]
+
+
+        return np.mean(region_data_unroll, axis=0)
+
+
 
 
 
@@ -168,6 +294,18 @@ class ImagingData(object):
         # return self.conditional_pred
 
 
+    def tca_load(self, method):
+        '''
+        Load a tca ensemble that has already been saved in a pkl file
+        :return: ensembleData object, also stored as a property
+        '''
+        rootpath = '/Volumes/GoogleDrive/Other computers/ImagingDESKTOP-AR620FK/processed/tca-factors/052422-baseline-corrected'
+        filepath = rootpath + f'/{self.animal}_{self.expdate}_ensemble_{method}.pkl'
+        ensemble = EnsembleData(filepath)
+        self.ensemble = ensemble
+        self.ranks = sorted(ensemble.ensemble.results)
+        self.is_loaded_data = True
+
 
     def tca_fit(self, nonneg=False, fit_method="cp_als", ranks=[1], replicates=1):
         '''
@@ -178,6 +316,7 @@ class ImagingData(object):
         ensemble.fit(self.datamat_norm, ranks=ranks, replicates=replicates)
         self.tca_ranks = ranks
         self.ensemble = ensemble
+        self.is_loaded_data = False
         return ensemble
 
     def tca_crossval(self, test_fraction, ranks=[1], method='ncp_hals'):
@@ -217,23 +356,37 @@ class ImagingData(object):
         :return: output of size N1 x N2 x T x Ntrials
         '''
         output = np.zeros((self.N1 * self.N2, self.T, len(self.trialsubset)))
-        output[self.mask_unroll,:,:] = input
+        output[self.mask_unroll == 1,:,:] = input
         return np.reshape(output, (self.N1, self.N2, self.T, len(self.trialsubset)))
 
 
-    def reconstruct(self, Nfactors, Nreplicates):
+    def reconstruct(self, Nfactors, Nreplicates, components=None):
         '''
         Make reconstructions (square) using: (1) TCA model, (2) raw data, (3) conditional averaged data
         :param Nfactors: number of factors to use in the TCA model
         :param Nreplicates: number of replicates to use in the TCA model
+        :param components: list of ints, if specified, only construct with the indicated components
         :return: the three arrays each of size N1 x N2 x T x Ntrials
         '''
-        self.recons = self.ensemble.factors(Nfactors)[Nreplicates].full()
+        if self.is_loaded_data:
+            KTensor = self.ensemble.ensemble.factors(Nfactors)[Nreplicates]
+            cond_sq = None
+        else:
+            KTensor = self.ensemble.factors(Nfactors)[Nreplicates]
+            cond_sq = self.make_square_matrix(self.conditional_pred)
+
+        # Select relevant components in the tensor
+        if components is not None:
+            NeuronsMat, Tmat, Bmat = KTensor.factors
+            NeuronsMat = NeuronsMat[:, components]
+            Tmat = Tmat[:, components]
+            Bmat = Bmat[:, components]
+            KTensor = tensortools.tensors.KTensor([NeuronsMat, Tmat, Bmat])
+
+
+        self.recons = KTensor.full()
         recons_sq = self.make_square_matrix(self.recons)
-
         raw_sq = self.make_square_matrix(self.datamat_norm)
-
-        cond_sq = self.make_square_matrix(self.conditional_pred)
 
         return recons_sq, raw_sq, cond_sq
 
@@ -241,6 +394,7 @@ class ImagingData(object):
 if __name__ == '__main__':
     animal = 'f01'
     expdate = '030421'
-    obj = ImagingData(animal, expdate)
+    print('done')
+    # obj = ImagingData(animal, expdate)
 
 
