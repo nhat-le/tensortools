@@ -24,7 +24,7 @@ class EnsembleData(object):
 
         rootpath = '/Volumes/GoogleDrive/Other computers/ImagingDESKTOP-AR620FK/processed/raw'
         datapath = f'{rootpath}/extracted/{self.animal}/allData_extracted_{self.animal}_{self.expdate}pix.mat'
-        print('Loading the behavioral data...')
+        # print('Loading the behavioral data...')
         behavdata = smart.loadmat(datapath, vars=['trialInfo'])
         self.feedback = behavdata['trialInfo']['feedback']
         self.choices = behavdata['trialInfo']['responses']
@@ -41,7 +41,7 @@ class EnsembleData(object):
         if 'mask' not in data:
             # TODO: Manually load the mask information
             templatepath = f'{rootpath}/templateData/{self.animal}/templateData_{self.animal}_{self.expdate}pix.mat'
-            print('Mask not found, loading from template file...')
+            # print('Mask not found, loading from template file...')
 
             templatedata = smart.loadmat(templatepath)
             self.mask = (np.abs(templatedata['template']['atlas']) < 300) & (templatedata['template']['atlas'] != 0)
@@ -50,7 +50,7 @@ class EnsembleData(object):
             ranks = sorted(self.ensemble.results)
             W, _, _ = self.ensemble.factors(ranks[0])[0].factors
             assert W.shape[0] == np.sum(self.mask)
-            print('Mask loaded')
+            # print('Mask loaded')
 
         else:
             self.mask = data['mask']
@@ -119,7 +119,44 @@ class EnsembleData(object):
         all_factors = self.get_factors(rank)
         arr = np.array([elem[2] for elem in all_factors])
         return np.transpose(arr, (1,2,0))
-        # return arr
+
+    def sort_trial_factors(self, rank):
+        '''
+        Sort trial factors into positions in the block
+        :param rank: int, rank of the ensemble of interest
+        :return: TF_blockPos, a list T of lists, where T[0] is a list
+        of all the factors occurring at position 0
+        '''
+        # build the 'position' array indicating the position of the trial in a block
+        position = []
+        count = 0
+        for i in range(len(self.targets) - 1):
+            position.append(count)
+            if self.targets[i] != self.targets[i + 1]:
+                count = 0
+            else:
+                count += 1
+
+        position.append(count)
+        position = np.array(position)
+
+        assert(len(position) == len(self.targets))
+
+        trial_factor_arr = self.get_trial_all_reps(rank)
+
+        TF_blockPos = []
+        for i in range(max(position)):
+            trial_factor_in_pos = trial_factor_arr[position == i, :, :]
+            TF_blockPos.append(trial_factor_in_pos)
+
+        return TF_blockPos, position
+
+
+
+
+
+
+
 
 
     def _find_variance_explained(self, rank, nrep):

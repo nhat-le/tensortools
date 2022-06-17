@@ -192,6 +192,7 @@ class Ensemble(object):
         ValueError: If no models of rank ``rank`` have been fit yet.
         """
         if rank not in self.results:
-            raise ValueError('No models of rank-{} have been fit.'
-                             'Call Ensemble.fit(tensor, rank={}, ...) '
-                             'to fit these models.'.format(rank))
+            raise ValueError(f'No models of rank-{rank} have been fit.'
+                             f'Fitted ranks are {list(self.results.keys())}. '
+                             f'Call Ensemble.fit(tensor, rank={rank}, ...) '
+                             f'to fit these models.')

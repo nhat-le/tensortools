@@ -93,6 +93,26 @@ def hclust_linearize(U):
     return hierarchy.leaves_list(hierarchy.optimal_leaf_ordering(Z, U))
 
 
+def pad_to_same_length(arrlst):
+    '''
+    Inputs
+    :param arrlst: list of arrays of length L, each with potentially of different lengths
+    :return: a concatenated array with shape L x max(lens)
+    where the shorter arrays are padded with nans
+    '''
+    arrlens = [len(arr) for arr in arrlst]
+    maxlen = np.max(arrlens)
+    # print(maxlen)
+    # pad everything to maxlen
+    padlst = []
+    for arr in arrlst:
+        Ntopad = maxlen - len(arr)
+        # print(Ntopad)
+        padded = np.pad(np.array(arr, dtype='float'), (0, Ntopad), constant_values=np.nan)
+        padlst.append(padded)
+    return np.array(padlst)
+
+
 def reverse_segment(path, n1, n2):
     """Reverse the nodes between n1 and n2.
     """
