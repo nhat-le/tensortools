@@ -175,10 +175,36 @@ class ModeCollection(object):
         return spatial, temporal, trial
 
 
+    def get_peak_times(self, modeID: int, repID: int):
+        '''
+        Get the peak times of the temporal mode
+        :param modeID:
+        :param repID:
+        :return:
+        '''
 
 
+    def get_reward_error_averages(self, modeID: int, repID: int, normalize='range'):
+        '''
+        Get the average reward and error trial factors
+        of mode and rep
+        :param modeID: int, id of the mode
+        :param repID: int, id of the rep
+        :return: mean_correct, mean_incorrect
+        '''
+        trial = self.trials[:, modeID, repID]
 
+        if normalize == 'meanstd':
+            # normalize by mean and standard deviation
+            trial = (trial - np.mean(trial)) / np.std(trial)
+        elif normalize == 'range':
+            # normalize to the range 0 to 1
+            trial = (trial - min(trial)) / (max(trial) - min(trial))
 
+        mean_corr = np.mean(trial[self.ens.feedback == 1])
+        mean_incorr = np.mean(trial[self.ens.feedback == 0])
+
+        return mean_corr, mean_incorr
 
 
     def do_trial_history_regression(self, mode_id, rep_id, Nback=5):
@@ -208,7 +234,7 @@ class ModeCollection(object):
 
         Xmat = np.vstack([const] + reward_arrs + choice_arrs + cr_arrs).T
 
-        mdl = sm.OLS(self.trials[Nback:, mode_id, rep_id], Xmat)
+        mdl = sm.OLS(np.log(self.trials[Nback:, mode_id, rep_id] + 1e-10), Xmat)
         res = mdl.fit()
 
         return res.params, res.bse
@@ -292,12 +318,22 @@ class TCAMode(object):
         :param sessionID: int, ID of the session
         '''
         # Find the session ID from the session name
+        self.modeID = modeID
+        self.repID = repID
+        self.session = session
+        self.animal = collection.animal
+
         sessionID = np.where(collection.expdates == session)[0]
         assert(len(sessionID) == 1)
         sessionID = sessionID[0]
 
         session_obj = collection.sessions[sessionID]
         self.spatial, self.temporal, self.trial = session_obj.get_modes(modeID, repID)
+        self.mean_trial_corr, self.mean_trial_incorr = session_obj.get_reward_error_averages(modeID, repID)
+
+        peakTZeroFrame = 17 #frames
+        self.peakT = (np.argmax(self.temporal) - peakTZeroFrame) / (37 / 2)
+        self.coefs, self.stderrs = session_obj.do_trial_history_regression(mode_id=modeID, rep_id=repID)
 
 
 
@@ -315,7 +351,7 @@ class GrandCollection(object):
         collections = [AnimalCollection(animal, N=Nmodes) for animal, Nmodes in zip(animals, Nmodes_lst)]
         return cls(collections)
 
-    def filter_modes(self, criterion: dict):
+    def filter_modes(self, criterion: dict, verbose=False):
         '''
         Filter modes based on regional criterion
         :param criterion: a dict, consisting of region 0/1 filters
@@ -323,8 +359,6 @@ class GrandCollection(object):
         that fulfill the criteiron
         '''
 
-        extracted_animals = []
-        extracted_dates = []
         allmodes = []
         for collection in self.collections:
             animal = collection.animal
@@ -352,17 +386,18 @@ class GrandCollection(object):
                 repID = subtbl.Nreps[row]
 
                 mode_obj = TCAMode(collection, session, modeID=modeID, repID=repID)
-                print(animal, session, modeID, repID)
-                extracted_animals.append(animal)
-                extracted_dates.append(session)
+                if verbose:
+                    print(animal, session, modeID, repID)
+
+                assert len(mode_obj.temporal) == 37
 
                 allmodes.append(mode_obj)
 
         print(f'Total modes extracted = {len(allmodes)}')
 
-        spatials = [item.spatial for item in allmodes]
-        temporals = [item.temporal for item in allmodes]
-        return spatials, temporals, extracted_animals, extracted_dates
+        # spatials = np.array([item.spatial for item in allmodes])
+        # temporals = np.array([item.temporal for item in allmodes])
+        return allmodes
 
 
 
