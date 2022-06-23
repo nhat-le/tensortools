@@ -1,15 +1,22 @@
 # A class for ensemble data with trial and mask information
+import glob
 
 import numpy as np
 import smartload.smartload as smart
 import time
 
 class EnsembleData(object):
-    def __init__(self, filepath):
+    def __init__(self, filepath, **kwargs):
         '''
         :param filepath: path to the ensemble pkl data
         :param loadbehav: whether to load the behavior data too
         '''
+
+        if 'load_behavior' in kwargs:
+            load_behavior = kwargs['load_behavior']
+        else:
+            load_behavior = True
+
         self.filepath = filepath
 
         self.animal, self.expdate, _, _, method = filepath.split('/')[-1].split('_')
@@ -30,14 +37,94 @@ class EnsembleData(object):
         self.choices = behavdata['trialInfo']['responses']
         self.targets = behavdata['trialInfo']['target']
 
+        if load_behavior:
+            self.load_state_information()
+            self.load_wheel_lick_information()
+
+        self.load_mask(data)
+
+
+    def load_wheel_lick_information(self) -> None:
+        '''
+        Load the wheel and lick information from the processed/raw/behavior folder
+        :return: None
+        '''
+        # Load the lick/wheel information
+        metricspath = '/Volumes/GoogleDrive/Other computers/ImagingDESKTOP-AR620FK/processed/raw/behavior'
+        metrics_filepath = f'{metricspath}/20{self.expdate[4:]}-{self.expdate[:2]}-{self.expdate[2:4]}_{self.sessnum}_{self.animal.upper()}/behavior_metrics.mat'
+        metricdata = smart.loadmat(metrics_filepath)
+        self.licks = metricdata['lickAligned']
+        self.wheel = metricdata['wheelSpeed']
+        self.wheelTimes = metricdata['wheelSpeedTime']
+
+        # check number of blocks
+        nblocks = np.sum(np.diff(self.targets) != 0) + 1
+        assert (len(self.zstates) == nblocks)
+
         # Verify number of trials
         ranks = sorted(self.ensemble.results)
         Ntrials = self.ensemble.factors(ranks[0])[0].factors[2].shape[0]
-        assert(len(self.feedback) == Ntrials)
-        assert(len(self.choices) == Ntrials)
-        assert(len(self.targets) == Ntrials)
+        assert (len(self.feedback) == Ntrials)
+        assert (len(self.choices) == Ntrials)
+        assert (len(self.targets) == Ntrials)
 
 
+
+    def load_state_information(self):
+        '''
+        Load the state information
+        '''
+        # Load the state information
+        hmm_filepath = '/Users/minhnhatle/Dropbox (MIT)/Sur/MatchingSimulations/PaperFigures/code/blockhmm/opto_analysis/optodata/061522defaultK6/wf_hmm_info.mat'
+        hmminfo = smart.loadmat(hmm_filepath)
+        animals = np.array([item['animal'] for item in hmminfo['animalinfo']])
+        animal_idx = np.where(animals == self.animal)[0]
+        assert len(animal_idx) == 1
+
+        # find the corresponding session
+        sessdate_lst = np.char.lower(hmminfo['animalinfo'][animal_idx[0]]['sessnames'])
+        filename = f'20{self.expdate[4:]}-{self.expdate[:2]}-{self.expdate[2:4]}_1_{self.animal.lower()}_block.mat'
+        # print('filename:', filename)
+        fileidx = np.where(sessdate_lst == filename)[0]
+        assert len(fileidx) == 1
+
+        self.zstates = hmminfo['animalinfo'][animal_idx[0]]['zclassified'][fileidx[0]]
+
+        # check how many behavioral sessions were done on that day
+        rigboxpath = '/Users/minhnhatle/Dropbox (MIT)/Nhat/Rigbox'
+        behavfolder = f'{rigboxpath}/{self.animal}/20{self.expdate[4:]}-{self.expdate[:2]}-{self.expdate[2:4]}/*/*Block.mat'
+        files = glob.glob(behavfolder)
+        print('--')
+        print(files)
+
+        # handle special cases with multiple sessions. i.e. len(files) > 1
+        if self.animal.lower() == 'e57' and self.expdate == '021721':
+            self.zstates = self.zstates[-5:]
+            self.sessnum = 3
+        elif self.animal.lower() == 'e57' and self.expdate == '030221':
+            self.zstates = self.zstates[-9:]
+            self.sessnum = 3
+        elif self.animal.lower() == 'e57' and self.expdate == '022321':
+            self.zstates = self.zstates[-7:]
+            self.sessnum = 2
+        elif self.animal.lower() == 'f02' and self.expdate == '030121':
+            self.zstates = self.zstates[-7:]
+            self.sessnum = 2
+        elif self.animal.lower() == 'f03' and self.expdate == '032221':
+            self.zstates = self.zstates[:10]
+            self.sessnum = 1
+        elif self.animal.lower() == 'f25' and self.expdate == '112321':
+            self.zstates = self.zstates[:]
+            self.sessnum = 2
+        elif self.animal.lower() == 'f25' and self.expdate == '112621':
+            self.zstates = self.zstates[:]
+            self.sessnum = 2
+        else:
+            self.sessnum = 1
+            assert (len(files) == 1)  # TODO: take care of this case
+
+
+    def load_mask(self, data):
         if 'mask' not in data:
             # TODO: Manually load the mask information
             templatepath = f'{rootpath}/templateData/{self.animal}/templateData_{self.animal}_{self.expdate}pix.mat'

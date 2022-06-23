@@ -2,11 +2,13 @@
 # and characterizing their properties
 import numpy as np
 import tensortools.custom.ensemble_data as Ens
+from tensortools.custom.glm_utils import GLM, GLMCollection
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import tqdm.notebook
 import glob
 import pandas as pd
+from dataclasses import dataclass
 
 
 
@@ -17,7 +19,7 @@ class AnimalCollection(object):
     '''
     A collection of sessions of the same animal
     '''
-    def __init__(self, animal, N, filepath=None, verbose=False):
+    def __init__(self, animal, N, filepath=None, verbose=False, **kwargs):
         '''
         :param filepath: str (optional), the path to the pkl files with the fitted TCA ensembles
         if None, will use the default filepath
@@ -42,12 +44,53 @@ class AnimalCollection(object):
         for path in tqdm.notebook.tqdm(filenames):
             if verbose:
                 print(f'Processing session {path}...')
-            session = ModeCollection(path, N)
+            session = ModeCollection(path, N, **kwargs)
             self.sessions.append(session)
             if verbose:
                 print(sorted(session.ens.ensemble.results))
 
         self.expdates = np.array([item.ens.expdate for item in self.sessions])
+
+
+    def get_session(self, session: str):
+        '''
+        Fetch the session from the collection given the date
+        :param session: a string, date of session
+        :return: a session from Collection object
+        '''
+        idx = np.where(self.expdates == session)[0]
+        assert(len(idx) == 1)
+        return self.sessions[idx[0]]
+
+
+    def get_wheel_speed_all_sessions(self):
+        '''
+        Get the wheel speed array for all sessions, size: Ntrials x T
+        :return:
+        '''
+        wheelArr_all = []
+        feedback_all = []
+        choices_all = []
+        zstates_all = []
+        licks_all = []
+        for session in self.sessions:
+            wheelArr = session.ens.wheel[1:,:]
+            wheelArr_all.append(wheelArr)
+            feedback_all.append(session.ens.feedback)
+            choices_all.append(session.ens.choices)
+            zstates_all.append(session.get_hmm_modes_trials())
+
+            assert(session.ens.licks is not None)
+            for elem in session.ens.licks[1:]:
+                licks_all.append(elem)
+
+
+        return np.vstack(wheelArr_all), np.concatenate(choices_all), np.concatenate(feedback_all), \
+               np.concatenate(zstates_all), licks_all
+
+
+
+
 
     def get_ensemble_obj(self, verbose=False):
         '''
@@ -109,15 +152,15 @@ class AnimalCollection(object):
 
 class ModeCollection(object):
     '''
-    A collection of TCA modes that were classified
+    A collection of TCA modes that were classified for a single session
     '''
-    def __init__(self, filepath, N):
+    def __init__(self, filepath, N, **kwargs):
         '''
         :param filepath: str, path to the ensemble file
         :param N: number of modes of TCA fit
         '''
         self.Nmodes = N
-        self.ens = Ens.EnsembleData(filepath)
+        self.ens = Ens.EnsembleData(filepath, **kwargs)
         self.animal = self.ens.animal
         self.method = self.ens.method
 
@@ -142,10 +185,10 @@ class ModeCollection(object):
                 self.regression_estimates.append(params)
                 self.regression_stderrs.append(stderr)
 
-        self.copy = self.regression_estimates.copy()
-
         self.regression_estimates = np.array(self.regression_estimates).reshape((self.Nmodes, self.Nreps, -1))
         self.regression_stderrs = np.array(self.regression_stderrs).reshape((self.Nmodes, self.Nreps, -1))
+
+
 
 
     # Try different constructor
@@ -182,6 +225,34 @@ class ModeCollection(object):
         :param repID:
         :return:
         '''
+        pass
+
+
+
+    def get_hmm_modes_trials(self):
+        '''
+        Get the array of HMM modes, same size as feedback/choices
+        :return:
+        '''
+        zstates = self.ens.zstates
+        targets = self.ens.targets
+
+        ztrials = []
+        count = 0
+        for i in range(len(targets) - 1):
+            ztrials.append(zstates[count])
+            if targets[i + 1] != targets[i]:
+                count += 1
+
+        ztrials.append(zstates[count])
+        assert(len(ztrials) == len(targets))
+
+        return ztrials
+
+
+
+
+
 
 
     def get_reward_error_averages(self, modeID: int, repID: int, normalize='range'):
@@ -230,12 +301,31 @@ class ModeCollection(object):
             choice_arrs.append(choice_ni)
             cr_arrs.append(cr_ni)
 
+        # hard coded for now: mean wheel displacement from frames 2500 -> 4000
+        wheelspeed = np.mean(self.ens.wheel[Nback + 1:, 2500:4000], axis=1)
+
+        # lick activity from -0.3s to 1s
+        lick_counts = []
+        lick_times = self.ens.licks
+        for lst in lick_times[Nback + 1:]:
+            count = np.sum((lst > -0.3) & (lst < 1))
+            lick_counts.append(count)
+
+
         const = np.ones(len(reward_ni))
 
-        Xmat = np.vstack([const] + reward_arrs + choice_arrs + cr_arrs).T
+        Xmat = np.vstack([const] + reward_arrs + choice_arrs + cr_arrs + [wheelspeed] + [lick_counts]).T
+        self.Xmat = Xmat
+        # Xmat = np.vstack([const] + reward_arrs + choice_arrs + cr_arrs).T
+        # print(Xmat.shape, mode_id, rep_id)
+        # self.Xmat = (Xmat - np.mean(Xmat, axis=0)) / np.std(Xmat, axis=0)
 
-        mdl = sm.OLS(np.log(self.trials[Nback:, mode_id, rep_id] + 1e-10), Xmat)
+        # mdl = sm.OLS(np.log(self.trials[Nback:, mode_id, rep_id] + 1e-10), Xmat)
+        # print(min(self.trials[Nback:, mode_id, rep_id]))
+        # print(max(self.trials[Nback:, mode_id, rep_id]))
+        mdl = sm.GLM(self.trials[Nback:, mode_id, rep_id], Xmat, family=sm.families.Poisson())
         res = mdl.fit()
+        # res = mdl.fit_regularized(L1_wt=0, alpha=0.1)
 
         return res.params, res.bse
 
@@ -333,7 +423,41 @@ class TCAMode(object):
 
         peakTZeroFrame = 17 #frames
         self.peakT = (np.argmax(self.temporal) - peakTZeroFrame) / (37 / 2)
+        X = session_obj.Xmat
+        y = session_obj.trials[5:, modeID, repID]
+        self.glm = GLM(X, y)
         self.coefs, self.stderrs = session_obj.do_trial_history_regression(mode_id=modeID, rep_id=repID)
+
+
+@dataclass
+class TCASimple(TCAMode):
+    '''
+    A simple class of TCA mode that stores only the basic params
+    '''
+    animal: str
+    session: str
+    modeID: int
+    repID: int
+    spatial: np.ndarray
+    temporal: np.ndarray
+    dR2: np.ndarray
+
+
+
+
+# class TCASimple(TCAMode):
+#     '''
+#     A simple class of TCA with only the basic parameters
+#     '''
+#     def __init__(self, animal: str, session: str, modeID: int, repID: int, spatial: np.ndarray, temporal: np.ndarray,
+#                  dR2: np.ndarray):
+#         self.animal = animal
+#         self.session = session
+#         self.modeID = modeID
+#         self.repID = repID
+#         self.spatial = spatial
+#         self.temporal = temporal
+#         self.dR2 = dR2
 
 
 
@@ -344,12 +468,26 @@ class GrandCollection(object):
     '''
     def __init__(self, collections: list[AnimalCollection]):
         self.collections = collections
+        self.animals = np.array([item.animal for item in collections])
 
     # alternative construction
     @classmethod
     def from_namelist(cls, Nmodes_lst, animals):
         collections = [AnimalCollection(animal, N=Nmodes) for animal, Nmodes in zip(animals, Nmodes_lst)]
         return cls(collections)
+
+
+    def get_collection(self, animal: str) -> AnimalCollection:
+        '''
+        Get a collection from the animal name
+        :param animal: string, animal name
+        :return:
+        '''
+        idx = np.where(self.animals == animal)[0]
+        assert(len(idx) == 1)
+        return self.collections[idx[0]]
+
+
 
     def filter_modes(self, criterion: dict, verbose=False):
         '''
@@ -364,7 +502,7 @@ class GrandCollection(object):
             animal = collection.animal
             Nmodes = collection.Nmodes
 
-            modetbl = pd.read_excel('tca_annotations_061422.xlsx', animal)
+            modetbl = pd.read_excel('tca_annotations_062022.xlsx', animal)
             modetbl = modetbl.fillna(0)
 
             assert (min(modetbl.Nmodes) == Nmodes)
@@ -395,9 +533,36 @@ class GrandCollection(object):
 
         print(f'Total modes extracted = {len(allmodes)}')
 
-        # spatials = np.array([item.spatial for item in allmodes])
-        # temporals = np.array([item.temporal for item in allmodes])
         return allmodes
+
+
+    def get_filtered_props(self, criterion: dict):
+        '''
+        Filter and return the properties
+        :param criterion:
+        :return:
+        '''
+        # Visual modes
+        coefrange = range(1, 19)
+
+        allmodes = self.filter_modes(criterion)
+        animals = [item.animal for item in allmodes]
+        dates = [item.session for item in allmodes]
+        reps = [item.repID for item in allmodes]
+        modes = [item.modeID for item in allmodes]
+        spatials = [item.spatial for item in allmodes]
+        temporals = [item.temporal for item in allmodes]
+        meancorr = np.array([item.mean_trial_corr for item in allmodes])
+        meanincorr = np.array([item.mean_trial_incorr for item in allmodes])
+        peakT = [item.peakT for item in allmodes]
+        coefs = np.array([[item.coefs[coefID] for item in allmodes] for coefID in coefrange])
+        stderrs = np.array([[item.stderrs[coefID] for item in allmodes] for coefID in coefrange])
+
+        glmdR2 = np.array([item.glm.dR2 for item in allmodes])
+
+        glmcollection = GLMCollection(animals, dates, reps, modes, spatials, temporals, glmdR2)
+
+        return animals, dates, reps, modes, spatials, temporals, meancorr, meanincorr, peakT, coefs, stderrs, glmcollection
 
 
 
