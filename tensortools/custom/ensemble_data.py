@@ -4,6 +4,7 @@ import glob
 import numpy as np
 import smartload.smartload as smart
 import time
+import matplotlib.pyplot as plt
 
 class EnsembleData(object):
     def __init__(self, filepath, **kwargs):
@@ -141,6 +142,17 @@ class EnsembleData(object):
 
         else:
             self.mask = data['mask']
+
+
+    def visualize_trials(self) -> None:
+        '''
+        Plot the choices and outcomes of the session
+        :return: None
+        '''
+        tpoints = np.arange(len(self.choices))
+        plt.figure(figsize=(9, 5))
+        plt.plot(tpoints[self.feedback == 1], self.targets[self.feedback == 1], 'bo')
+        plt.plot(tpoints[self.feedback == 0], self.targets[self.feedback == 0], 'rx')
 
 
     def reconstruct(self, rank, Nreps):

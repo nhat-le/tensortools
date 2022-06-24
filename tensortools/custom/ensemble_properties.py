@@ -1,14 +1,18 @@
 # Structures and utilities for keeping track and organizing the TCA factors
 # and characterizing their properties
+from __future__ import annotations
 import numpy as np
 import tensortools.custom.ensemble_data as Ens
-from tensortools.custom.glm_utils import GLM, GLMCollection
+from tensortools.custom.glm_utils import GLM
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import tqdm.notebook
+import tensortools.custom.task_data as task
 import glob
 import pandas as pd
+from tensortools.custom.tca_collections import GLMCollection
 from dataclasses import dataclass
+from sklearn.cluster import KMeans
 
 
 
@@ -154,7 +158,7 @@ class ModeCollection(object):
     '''
     A collection of TCA modes that were classified for a single session
     '''
-    def __init__(self, filepath, N, **kwargs):
+    def __init__(self, filepath, N, Nback=5, **kwargs):
         '''
         :param filepath: str, path to the ensemble file
         :param N: number of modes of TCA fit
@@ -163,6 +167,8 @@ class ModeCollection(object):
         self.ens = Ens.EnsembleData(filepath, **kwargs)
         self.animal = self.ens.animal
         self.method = self.ens.method
+        self.Nback = Nback
+        self.Xmat = None
 
         self.spatials = self.ens.get_spatial_all_reps(N)
         self.temporals = self.ens.get_temporal_all_reps(N)
@@ -181,22 +187,12 @@ class ModeCollection(object):
 
         for mode_id in range(self.Nmodes):
             for rep_id in range(self.Nreps):
-                params, stderr = self.do_trial_history_regression(mode_id, rep_id, Nback=5)
+                params, stderr = self.do_trial_history_regression(mode_id, rep_id, Nback=Nback)
                 self.regression_estimates.append(params)
                 self.regression_stderrs.append(stderr)
 
         self.regression_estimates = np.array(self.regression_estimates).reshape((self.Nmodes, self.Nreps, -1))
         self.regression_stderrs = np.array(self.regression_stderrs).reshape((self.Nmodes, self.Nreps, -1))
-
-
-
-
-    # Try different constructor
-    # @classmethod
-    # def alternative_construct(cls):
-    #     filepath = '/Volumes/GoogleDrive/Other computers/ImagingDESKTOP-AR620FK/processed/tca-factors/nodelays_061322/e57_022621_ensemble_ncp_hals.pkl'
-    #     obj = cls(filepath, 6)
-    #     return obj
 
 
     def get_modes(self, modeID: int, repID: int):
@@ -249,12 +245,6 @@ class ModeCollection(object):
 
         return ztrials
 
-
-
-
-
-
-
     def get_reward_error_averages(self, modeID: int, repID: int, normalize='range'):
         '''
         Get the average reward and error trial factors
@@ -285,45 +275,60 @@ class ModeCollection(object):
         :param Nback: # of trials back for regression
         :return: the results of the regression, as two lists: the estimates and the standard error
         '''
-        reward_arrs = []
-        choice_arrs = []
-        cr_arrs = []
 
-        for i in range(Nback + 1):
-            if i == 0:
-                reward_ni = self.ens.feedback[Nback - i:].astype('float') * 2 - 1
-                choice_ni = self.ens.choices[Nback - i:].astype('float')
-            else:
-                reward_ni = self.ens.feedback[Nback - i: -i].astype('float') * 2 - 1
-                choice_ni = self.ens.choices[Nback - i: -i].astype('float')
-            cr_ni = reward_ni * choice_ni
-            reward_arrs.append(reward_ni)
-            choice_arrs.append(choice_ni)
-            cr_arrs.append(cr_ni)
+        if self.Xmat is None:
+            # Recompute Xmat
+            reward_arrs = []
+            choice_arrs = []
+            cr_arrs = []
 
-        # hard coded for now: mean wheel displacement from frames 2500 -> 4000
-        wheelspeed = np.mean(self.ens.wheel[Nback + 1:, 2500:4000], axis=1)
+            for i in range(Nback + 1):
+                if i == 0:
+                    reward_ni = self.ens.feedback[Nback - i:].astype('float') * 2 - 1
+                    choice_ni = self.ens.choices[Nback - i:].astype('float')
+                else:
+                    reward_ni = self.ens.feedback[Nback - i: -i].astype('float') * 2 - 1
+                    choice_ni = self.ens.choices[Nback - i: -i].astype('float')
+                cr_ni = reward_ni * choice_ni
+                reward_arrs.append(reward_ni)
+                choice_arrs.append(choice_ni)
+                cr_arrs.append(cr_ni)
 
-        # lick activity from -0.3s to 1s
-        lick_counts = []
-        lick_times = self.ens.licks
-        for lst in lick_times[Nback + 1:]:
-            count = np.sum((lst > -0.3) & (lst < 1))
-            lick_counts.append(count)
+            # hard coded for now: mean wheel displacement from frames 2500 -> 4000
+            wheelspeed = np.mean(self.ens.wheel[Nback + 1:, 2500:4000], axis=1)
+
+            # lick activity from -0.3s to 1s
+            lick_counts = []
+            lick_times = self.ens.licks
+            for lst in lick_times[Nback + 1:]:
+                count = np.sum((lst > -0.3) & (lst < 1))
+                lick_counts.append(count)
+
+            const = np.ones(len(reward_ni))
+
+            # TODO: Implement value and switch regressors here
+            _, v1_regressor, _ = task.get_value_regressor(self.ens)
+            v1_regressor = v1_regressor[Nback + 1:]
+            switch_regressor = task.get_switch_prob(self.ens)[Nback + 1:]
+
+            # Pad or truncate
+            if len(v1_regressor) < len(wheelspeed):
+                v1_regressor = np.pad(v1_regressor, (0, len(wheelspeed) - len(v1_regressor)), mode='edge')
+            elif len(v1_regressor) > len(wheelspeed):
+                v1_regressor = v1_regressor[:len(wheelspeed)]
+
+            if len(switch_regressor) < len(wheelspeed):
+                switch_regressor = np.pad(switch_regressor, (0, len(wheelspeed) - len(switch_regressor)), mode='edge')
+            elif len(switch_regressor) > len(wheelspeed):
+                switch_regressor = switch_regressor[:len(wheelspeed)]
 
 
-        const = np.ones(len(reward_ni))
+            Xmat = np.vstack([const] + reward_arrs + choice_arrs + cr_arrs + [wheelspeed] + [lick_counts] + \
+                             [v1_regressor] + [switch_regressor]).T
+            self.Xmat = Xmat
 
-        Xmat = np.vstack([const] + reward_arrs + choice_arrs + cr_arrs + [wheelspeed] + [lick_counts]).T
-        self.Xmat = Xmat
-        # Xmat = np.vstack([const] + reward_arrs + choice_arrs + cr_arrs).T
-        # print(Xmat.shape, mode_id, rep_id)
-        # self.Xmat = (Xmat - np.mean(Xmat, axis=0)) / np.std(Xmat, axis=0)
 
-        # mdl = sm.OLS(np.log(self.trials[Nback:, mode_id, rep_id] + 1e-10), Xmat)
-        # print(min(self.trials[Nback:, mode_id, rep_id]))
-        # print(max(self.trials[Nback:, mode_id, rep_id]))
-        mdl = sm.GLM(self.trials[Nback:, mode_id, rep_id], Xmat, family=sm.families.Poisson())
+        mdl = sm.GLM(self.trials[Nback:, mode_id, rep_id], self.Xmat, family=sm.families.Poisson())
         res = mdl.fit()
         # res = mdl.fit_regularized(L1_wt=0, alpha=0.1)
 
@@ -341,6 +346,10 @@ class ModeCollection(object):
                 ax[i * 2][j].set_xticks([])
                 ax[i * 2][j].set_yticks([])
                 ax[i * 2 + 1][j].plot(self.temporals[:, j, i])
+
+
+
+
 
 
     def plot_trials(self, rep_id):
@@ -424,40 +433,10 @@ class TCAMode(object):
         peakTZeroFrame = 17 #frames
         self.peakT = (np.argmax(self.temporal) - peakTZeroFrame) / (37 / 2)
         X = session_obj.Xmat
-        y = session_obj.trials[5:, modeID, repID]
+        y = session_obj.trials[session_obj.Nback:, modeID, repID]
         self.glm = GLM(X, y)
         self.coefs, self.stderrs = session_obj.do_trial_history_regression(mode_id=modeID, rep_id=repID)
 
-
-@dataclass
-class TCASimple(TCAMode):
-    '''
-    A simple class of TCA mode that stores only the basic params
-    '''
-    animal: str
-    session: str
-    modeID: int
-    repID: int
-    spatial: np.ndarray
-    temporal: np.ndarray
-    dR2: np.ndarray
-
-
-
-
-# class TCASimple(TCAMode):
-#     '''
-#     A simple class of TCA with only the basic parameters
-#     '''
-#     def __init__(self, animal: str, session: str, modeID: int, repID: int, spatial: np.ndarray, temporal: np.ndarray,
-#                  dR2: np.ndarray):
-#         self.animal = animal
-#         self.session = session
-#         self.modeID = modeID
-#         self.repID = repID
-#         self.spatial = spatial
-#         self.temporal = temporal
-#         self.dR2 = dR2
 
 
 
@@ -560,7 +539,7 @@ class GrandCollection(object):
 
         glmdR2 = np.array([item.glm.dR2 for item in allmodes])
 
-        glmcollection = GLMCollection(animals, dates, reps, modes, spatials, temporals, glmdR2)
+        glmcollection = GLMCollection.from_animal_info(animals, dates, reps, modes, spatials, temporals, glmdR2)
 
         return animals, dates, reps, modes, spatials, temporals, meancorr, meanincorr, peakT, coefs, stderrs, glmcollection
 

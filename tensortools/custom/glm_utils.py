@@ -2,7 +2,7 @@
 import numpy as np
 import statsmodels.api as sm
 from sklearn.model_selection import KFold
-from tensortools.custom.ensemble_properties import  TCASimple
+# from tensortools.custom.ensemble_properties import TCASimple
 
 class GLM(object):
     '''
@@ -85,43 +85,6 @@ class GLM(object):
             partialR2_lst.append(R2 - partialR2)
 
         return R2, partialR2_lst
-
-
-class GLMCollection(object):
-    '''
-    A class of GLM dR2 together with information about the session
-    and type of mode
-    '''
-    def __init__(self, animals, dates, reps, modes, spatials, temporals, glmdR2):
-        '''
-        :param animals: list of strings
-        :param dates: list of strings
-        :param reps: list[int]
-        :param modes: list[int]
-        :param spatials: list[np array]
-        :param temporals: list[np array]
-        :param glmdR2: list[np array]
-        '''
-        assert(len(animals) == len(dates) == len(reps) == len(modes) == len(spatials) == len(temporals))
-        assert(len(animals) == glmdR2.shape[0])
-
-        self.tca_modes = []
-        for i in range(len(animals)):
-            tca_mode = TCASimple(animals[i], dates[i], modes[i], reps[i], spatials[i], temporals[i], glmdR2[i])
-            self.tca_modes.append(tca_mode)
-
-
-
-    
-        # self.animals = animals
-        # self.dates = dates
-        # self.reps = reps
-        # self.modes = modes
-        # self.spatials = spatials
-        # self.temporals = temporals
-        # self.glmdR2 = glmdR2
-
-
 
 
 

@@ -3,9 +3,10 @@ import numpy as np
 import scipy.optimize
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
+from tensortools.custom.ensemble_data import EnsembleData
 
 
-def get_switch_prob(sessdata, window=10):
+def get_switch_prob(sessdata: EnsembleData, window=10):
     '''
     sessdata: EnsembleData object
     window: window for calculating the switch prob
@@ -107,7 +108,7 @@ def fit_value_regressor(sessdata):
     that best explains the data
     '''
     p0 = (0.5, 0.1) #initial guess
-    p = scipy.optimize.minimize(likelihood, p0, (sessdata))
+    p = scipy.optimize.minimize(likelihood, p0, (sessdata), bounds=((0, None), (None, None)))
     return p
 
 
