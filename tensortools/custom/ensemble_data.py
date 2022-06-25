@@ -30,8 +30,8 @@ class EnsembleData(object):
         ranks = sorted(self.ensemble.results)
         self.nreps = len(self.ensemble.results[ranks[0]])
 
-        rootpath = '/Volumes/GoogleDrive/Other computers/ImagingDESKTOP-AR620FK/processed/raw'
-        datapath = f'{rootpath}/extracted/{self.animal}/allData_extracted_{self.animal}_{self.expdate}pix.mat'
+        self.rootpath = '/Volumes/GoogleDrive/Other computers/ImagingDESKTOP-AR620FK/processed/raw'
+        datapath = f'{self.rootpath}/extracted/{self.animal}/allData_extracted_{self.animal}_{self.expdate}pix.mat'
         # print('Loading the behavioral data...')
         behavdata = smart.loadmat(datapath, vars=['trialInfo'])
         self.feedback = behavdata['trialInfo']['feedback']
@@ -95,8 +95,8 @@ class EnsembleData(object):
         rigboxpath = '/Users/minhnhatle/Dropbox (MIT)/Nhat/Rigbox'
         behavfolder = f'{rigboxpath}/{self.animal}/20{self.expdate[4:]}-{self.expdate[:2]}-{self.expdate[2:4]}/*/*Block.mat'
         files = glob.glob(behavfolder)
-        print('--')
-        print(files)
+        # print('--')
+        # print(files)
 
         # handle special cases with multiple sessions. i.e. len(files) > 1
         if self.animal.lower() == 'e57' and self.expdate == '021721':
@@ -128,7 +128,7 @@ class EnsembleData(object):
     def load_mask(self, data):
         if 'mask' not in data:
             # TODO: Manually load the mask information
-            templatepath = f'{rootpath}/templateData/{self.animal}/templateData_{self.animal}_{self.expdate}pix.mat'
+            templatepath = f'{self.rootpath}/templateData/{self.animal}/templateData_{self.animal}_{self.expdate}pix.mat'
             # print('Mask not found, loading from template file...')
 
             templatedata = smart.loadmat(templatepath)

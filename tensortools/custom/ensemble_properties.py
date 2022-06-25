@@ -181,18 +181,21 @@ class ModeCollection(object):
         self.spatials = np.transpose(self.spatials, (1, 2, 3, 0)) # size: N1 x N2 x N x Nreps
         self.temporals = np.transpose(self.temporals, (1, 2, 0)) # size: T x N x Nreps
 
+        # Prepare Xmat for regression
+        self.prepare_Xmat()
+
         # Trial history regression
-        self.regression_estimates = []
-        self.regression_stderrs = []
+        # self.regression_estimates = []
+        # self.regression_stderrs = []
 
-        for mode_id in range(self.Nmodes):
-            for rep_id in range(self.Nreps):
-                params, stderr = self.do_trial_history_regression(mode_id, rep_id, Nback=Nback)
-                self.regression_estimates.append(params)
-                self.regression_stderrs.append(stderr)
-
-        self.regression_estimates = np.array(self.regression_estimates).reshape((self.Nmodes, self.Nreps, -1))
-        self.regression_stderrs = np.array(self.regression_stderrs).reshape((self.Nmodes, self.Nreps, -1))
+        # for mode_id in range(self.Nmodes):
+        #     for rep_id in range(self.Nreps):
+        #         params, stderr = self.do_trial_history_regression(mode_id, rep_id, Nback=Nback)
+        #         self.regression_estimates.append(params)
+        #         self.regression_stderrs.append(stderr)
+        #
+        # self.regression_estimates = np.array(self.regression_estimates).reshape((self.Nmodes, self.Nreps, -1))
+        # self.regression_stderrs = np.array(self.regression_stderrs).reshape((self.Nmodes, self.Nreps, -1))
 
 
     def get_modes(self, modeID: int, repID: int):
@@ -243,7 +246,7 @@ class ModeCollection(object):
         ztrials.append(zstates[count])
         assert(len(ztrials) == len(targets))
 
-        return ztrials
+        return np.array(ztrials)
 
     def get_reward_error_averages(self, modeID: int, repID: int, normalize='range'):
         '''
@@ -268,14 +271,7 @@ class ModeCollection(object):
         return mean_corr, mean_incorr
 
 
-    def do_trial_history_regression(self, mode_id, rep_id, Nback=5):
-        '''
-        :param mode_id: id of mode from 0 to Nmodes - 1
-        :param rep_id: id of rep from 0 to Nreps - 1
-        :param Nback: # of trials back for regression
-        :return: the results of the regression, as two lists: the estimates and the standard error
-        '''
-
+    def prepare_Xmat(self, Nback=5) -> np.ndarray:
         if self.Xmat is None:
             # Recompute Xmat
             reward_arrs = []
@@ -327,12 +323,36 @@ class ModeCollection(object):
                              [v1_regressor] + [switch_regressor]).T
             self.Xmat = Xmat
 
+        return self.Xmat
+
+
+
+    def do_trial_history_regression(self, mode_id, rep_id, Nback=5):
+        '''
+        :param mode_id: id of mode from 0 to Nmodes - 1
+        :param rep_id: id of rep from 0 to Nreps - 1
+        :param Nback: # of trials back for regression
+        :return: the results of the regression, as two lists: the estimates and the standard error
+        '''
+        if self.Xmat is None:
+            self.prepare_Xmat(Nback=Nback)
 
         mdl = sm.GLM(self.trials[Nback:, mode_id, rep_id], self.Xmat, family=sm.families.Poisson())
         res = mdl.fit()
-        # res = mdl.fit_regularized(L1_wt=0, alpha=0.1)
 
         return res.params, res.bse
+
+
+    def do_regression_states(self):
+        zstates = self.get_hmm_modes_trials()
+
+        # self.
+
+        # For each state in zstate, do a separate GLM
+
+
+
+
 
     def plot_spatial_temporal(self):
         '''

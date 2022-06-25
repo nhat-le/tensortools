@@ -3,6 +3,12 @@ import numpy as np
 import scipy.optimize
 import scipy.stats
 from tensortools.custom import imaging_data
+import matplotlib.pyplot as plt
+
+
+def pltdefault(fontsize=20):
+    fonts = dict(family='helvetica', size=fontsize)
+    plt.rc('font', **fonts)
 
 def load_and_run(rootpath, animal, expdate, fit_method, ranks, kwargs):
     '''
